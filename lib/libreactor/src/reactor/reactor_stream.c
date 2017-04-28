@@ -10,7 +10,6 @@
 
 #include <dynamic.h>
 
-#include "reactor_util.h"
 #include "reactor_user.h"
 #include "reactor_pool.h"
 #include "reactor_core.h"
@@ -39,10 +38,10 @@ static void reactor_stream_event(void *state, int type, void *arg)
   ssize_t n;
 
   (void) type;
-  if (reactor_likely(revents == POLLIN && !buffer_size(&stream->input)))
+  if (revents == POLLIN && !buffer_size(&stream->input))
     {
       n = read(stream->fd, buffer, sizeof buffer);
-      if (reactor_unlikely(n <= 0))
+      if (n <= 0)
         {
           if (n == 0)
             reactor_user_dispatch(&stream->user, REACTOR_STREAM_EVENT_HANGUP, NULL);
@@ -52,37 +51,37 @@ static void reactor_stream_event(void *state, int type, void *arg)
         }
       data = (reactor_stream_data) {.base = buffer, .size = n};
       reactor_user_dispatch(&stream->user, REACTOR_STREAM_EVENT_READ, &data);
-      if (reactor_unlikely(data.size))
+      if (data.size)
         buffer_insert(&stream->input, buffer_size(&stream->input), data.base, data.size);
     }
   else
     {
       reactor_stream_hold(stream);
-      if (reactor_unlikely(revents & (POLLERR | POLLNVAL)))
+      if (revents & (POLLERR | POLLNVAL))
         reactor_stream_error(stream);
       else
         {
-          if (reactor_unlikely(revents & POLLOUT))
+          if (revents & POLLOUT)
             reactor_stream_flush(stream);
-          if (reactor_unlikely((revents & (POLLIN|POLLHUP)) == POLLHUP))
+          if ((revents & (POLLIN|POLLHUP) == POLLHUP))
             reactor_user_dispatch(&stream->user, REACTOR_STREAM_EVENT_HANGUP, NULL);
-          else if (reactor_likely(revents & POLLIN))
+          else if (revents & POLLIN)
             {
               n = read(stream->fd, buffer, sizeof buffer);
-              if (reactor_unlikely(n == 0))
+              if (n == 0)
                 reactor_user_dispatch(&stream->user, REACTOR_STREAM_EVENT_HANGUP, NULL);
-              else if (reactor_unlikely(n == -1))
+              else if (n == -1)
                 {
                   if (errno != EAGAIN)
                     reactor_stream_error(stream);
                 }
               else
                 {
-                  if (reactor_likely(!buffer_size(&stream->input)))
+                  if (!buffer_size(&stream->input))
                     {
                       data = (reactor_stream_data) {.base = buffer, .size = n};
                       reactor_user_dispatch(&stream->user, REACTOR_STREAM_EVENT_READ, &data);
-                      if (reactor_unlikely(data.size))
+                      if (data.size)
                         buffer_insert(&stream->input, buffer_size(&stream->input), data.base, data.size);
                     }
                   else
@@ -107,7 +106,7 @@ void reactor_stream_hold(reactor_stream *stream)
 void reactor_stream_release(reactor_stream *stream)
 {
   stream->ref --;
-  if (reactor_unlikely(!stream->ref))
+  if (!stream->ref)
     {
       reactor_stream_close_fd(stream);
       buffer_destruct(&stream->input);
@@ -204,7 +203,7 @@ void reactor_stream_flush(reactor_stream *stream)
   do
     {
       n = write(stream->fd, base, size);
-      if (reactor_unlikely(n == -1))
+      if (n == -1)
         break;
       base += n;
       size -= n;
@@ -212,7 +211,7 @@ void reactor_stream_flush(reactor_stream *stream)
   while (size);
 
   buffer_erase(&stream->output, 0, buffer_size(&stream->output) - size);
-  if (reactor_unlikely(buffer_size(&stream->output) == 0))
+  if (buffer_size(&stream->output) == 0)
     {
       if (stream->state == REACTOR_STREAM_STATE_OPEN)
         {
@@ -224,7 +223,7 @@ void reactor_stream_flush(reactor_stream *stream)
       return;
     }
 
-  if (reactor_unlikely(errno == EAGAIN))
+  if (errno == EAGAIN)
     {
       ((struct pollfd *) reactor_core_fd_poll(stream->fd))->events |= POLLOUT;
       reactor_user_dispatch(&stream->user, REACTOR_STREAM_EVENT_BLOCKED, NULL);
@@ -234,7 +233,7 @@ void reactor_stream_flush(reactor_stream *stream)
   reactor_stream_hold(stream);
   saved_state = stream->state;
   reactor_stream_error(stream);
-  if (reactor_unlikely(saved_state == REACTOR_STREAM_STATE_CLOSING))
+  if (saved_state == REACTOR_STREAM_STATE_CLOSING)
     reactor_stream_close(stream);
   reactor_stream_release(stream);
 }

@@ -25,7 +25,6 @@ src/reactor/reactor_http_server.c
 
 HEADER_FILES = \
 src/reactor/reactor_memory.h \
-src/reactor/reactor_util.h \
 src/reactor/reactor_user.h \
 src/reactor/reactor_pool.h \
 src/reactor/reactor_core.h \
